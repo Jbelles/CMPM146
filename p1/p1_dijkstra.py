@@ -68,4 +68,4 @@ def test_route(filename, src_waypoint, dst_waypoint, keyFound):
 		print("No path possible!!!")
 
 if __name__ ==  '__main__':
-	test_route('level2.txt', "a", "i", False)
+	test_route('level2.txt', 'a', 'b', True)

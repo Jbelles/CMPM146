@@ -58,7 +58,6 @@ def test_route(filename, src_waypoint, dst_waypoint, keyFound):
 	src = level['waypoints'][src_waypoint]
 	dst = level['waypoints'][dst_waypoint]
 
-
 	path = dijkstra(src, dst, level, get_steps)
 
 	if path:
@@ -68,4 +67,4 @@ def test_route(filename, src_waypoint, dst_waypoint, keyFound):
 		print("No path possible!!!")
 
 if __name__ ==  '__main__':
-	test_route('level2.txt', 'a', 'b', True)
+	test_route('level3.txt', "a", "b", False)

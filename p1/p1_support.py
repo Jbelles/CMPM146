@@ -32,8 +32,9 @@ def load_level(filename, keyFound):
 
 
 def show_level(level, path=[]):
-
-	xs, ys = zip(*(level['spaces'].keys() and level['walls'].keys()))
+	space_cells = list(level['spaces'].keys())
+	wall_cells = list(level['walls'].keys())
+	xs, ys = zip(*(space_cells + wall_cells))
 	x_lo = min(xs)
 	x_hi = max(xs)
 	y_lo = min(ys)

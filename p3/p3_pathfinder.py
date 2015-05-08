@@ -30,9 +30,9 @@ def distance_fn(dst, src):
    return abs(dst[0] - src[0]) + abs(dst[1] - src[1])	
 
 
-def find_path(src, dst, mesh):
-	path = [] #technically priority queue/heapq
-	queue = []
+def find_path(src, dst, mesh): #A*
+	path = [] 
+	queue = []#technically priority queue/heapq
 	detail_points = {}
 	dist = {}
 	prev = {}

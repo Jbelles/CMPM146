@@ -22,7 +22,7 @@ def goal_check(state, goal):
     for i in range(len(state)):
         if state[i] < goal[i]:
             return False
-    print "Goal Found"
+    print "goal reached"
     return True
 
 def make_initial_state(inventory):

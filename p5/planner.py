@@ -1,141 +1,180 @@
 import json
-from collections import namedtuple
-from math import sqrt
 from heapq import heappush, heappop
-
+from collections import namedtuple
 with open('Crafting.json') as f:
-    Crafting = json.load(f)
+   Crafting = json.load(f)
 
-total_cost = 0
-plan = None
-items = {}
-inventory = []
-Recipe = namedtuple('Recipe', ['name', 'check', 'effect', 'cost'])
+# List of items that can be in your inventory:
+print "Items:", Crafting['Items']
+# example: ['bench', 'cart', ..., 'wood', 'wooden_axe', 'wooden_pickaxe']
 
-def set_goal(inventory):
-    temp_goal = list(inventory)
-    for each in Crafting['Goal']:
-        temp_goal[items[each]] = Crafting['Goal'][each]
-    return tuple(temp_goal)
+# List of items in your initial inventory with amounts:
+print "Inventory:", Crafting['Initial']
+# {'coal': 4, 'plank': 1}
 
-def goal_check(state, goal):
-    for i in range(len(state)):
-        if state[i] < goal[i]:
-            return False
-    print "goal reached"
-    return True
+# List of items needed to be in your inventory at the end of the plan:
+# (okay to have more than this; some might be satisfied by initial inventory)
+print "Goal:", Crafting['Goal']
+# {'stone_pickaxe': 2}
 
-def make_initial_state(inventory):
-    i = 0
-    initial_state = inventory
-    for item in Crafting['Items']:
-        items[item] = i
-        i += 1
-        initial_state.append(0)
-    initial_state = list(inventory)
-    return initial_state
-
+# Dict of crafting recipeDict (each is a dict):
+#print Crafting['Recipes']['craft stone_pickaxe at bench']
+# example:
+# { 'Produces': {'stone_pickaxe': 1},
+#   'Requires': {'bench': True},
+#   'Consumes': {'cobble': 3, 'stick': 2},
+#   'Time': 1
+# }
+   
 def make_checker(rule):
-    requires = None
-    consumes = None
-    if 'Requires' in rule:
-        requires = rule['Requires']
-    if 'Consumes' in rule:
-        consumes = rule['Consumes']
-
-    def check(state):
-        if consumes:
-            for i in consumes:
-                if state[items[i]] < consumes[i]:
-                    return False
-        if requires:
-            for i in requires:
-                if state[items[i]] < 1:
-                    return False
-        return True
-
-    return check
+   consumes = []
+   requires = []
+   if 'Consumes' in rule:
+      consumes = [(item,rule['Consumes'][item]) for item in rule['Consumes']]
+   if 'Requires' in rule:
+      requires = [item for item in rule['Requires'].keys()]
+   produce = [(item,rule['Produces'][item]) for item in rule['Produces']]
+   def check(state):
+      for i,a in produce:
+         if recipeDict[i] == 0:
+             return False
+         if i in state:
+            if state[i] >= recipeDict[i]:
+                return False
+      for each in requires:
+         if each not in state:
+            return False
+      for each,amount in consumes:
+         if each not in state:
+            return False
+         else:
+            if (state[each] < amount):
+               return False
+      return True
+   return check
 
 def make_effector(rule):
-    produces = rule['Produces']
-    consumes = None
-    if 'Consumes' in rule:
-        consumes = rule['Consumes']
+   consumes = []
+   produce = []
+   if 'Consumes' in rule:
+      consumes = [(item,rule['Consumes'][item]) for item in rule['Consumes']]
+   if 'Produces' in rule:
+        produce = [(item,rule['Produces'][item]) for item in rule['Produces']]
+   def effect(state):
+      returnstate = state.copy()
+      for i,a in consumes:
+         returnstate[i] -= a
+      for i,a in produce:
+         if not i in state:
+            returnstate[i] = 0
+         returnstate[i] += a
+      return returnstate
+   return effect
 
-    def effect(state):
-        next_state = list(state)
-        if consumes:
-            for i in consumes:
-                next_state[items[i]] -= consumes[i]
-        for i in produces:
-            next_state[items[i]] += produces[i]
+def search(graph,initial,is_goal):
+   #the amount of goal object
+   for each, amount in Crafting['Goal'].items():
+       recipeDict[each] = amount
+       #print "amount", amount, each, "recipe", recipeDict[each]
+   num = 1
+   craftPath = []
+   if is_goal(initial):
+      return
+   else:
+      inventory = initial
+      adjlist = graph(inventory)
+      lookat = []
+      for steps in adjlist:
+        heappush(lookat, (steps[2], steps, craftPath))
+        #print "lookat:", lookat, "steps[2]:", steps[2], "steps:", steps, "craftPath", craftPath
+      while len(lookat) > 0:
+         curr = lookat.pop(0)
+         #print "curr:", curr
+         copyPath = []
+         for items in curr[2]:
+            copyPath.append(items)
+         if is_goal(curr[1][1]):
+            curr[2].append((curr[1][0], curr[1][1]))
+            print ""
+            print "BEGIN PROCESS", Crafting['Goal'] 
+            print ""
+            for items in curr[2]:
+                print  "Step", num, ":", items
+                num = num + 1
+            print ""
+            print "FINISHED", Crafting['Goal']
+            print ""
+            return
+         num = 1
+         adjlist = graph(curr[1][1])
+         copyPath.append((curr[1][0], curr[1][1]))
+         heu = steps[2] + curr[0] - 4
+         for steps in adjlist:
+            heappush(lookat, (heu, steps, copyPath))
+      return
+   
+def graph(state):
+   for r in all_recipes:
+      if r.check(state):
+         yield (r.name, r.effect(state), r.cost, state.copy())
 
-        return next_state
+#function to identify if items is already there/made
+def is_goal(state):
+   for item, amount in Crafting['Goal'].items():
+      if item in state:
+         if state[item] < amount:
+            return False
+      else:
+         return False
+   return True
 
-    return effect
-
-
-
-def search(recipes, initial_state, goal, is_goal, limit, heuristic):
-    queue = []
-    prev = {}
-    dist = {}
-    disc = []
-    recipe_name = {}
-    curr_state = list(initial_state)
-
-    recipe_name[tuple(curr_state)] = ""
-    prev[tuple(curr_state)] = None
-    dist[tuple(curr_state)] = 0
-
-    while not is_goal(curr_state, goal):
-        for recipe in recipes:
-            if recipe.check(curr_state):
-                new_state = tuple(recipe.effect(curr_state))
-                if new_state not in disc:
-                    prev[new_state] = tuple(curr_state)
-                    dist[new_state] = dist[tuple(curr_state)] + recipe.cost
-                    heappush(queue, (dist[new_state], new_state))
-                    disc.append(new_state)
-                    recipe_name[tuple(curr_state)] = recipe.name
-
-                elif dist[new_state] > dist[curr_state] + recipe.cost:
-                    prev[new_state] = tuple(curr_state)
-                    dist[new_state] = dist[curr_state] + recipe.cost
-        curr_state = heappop(queue)[1]
-    print "new state", curr_state
-
-    total_cost = dist[curr_state]
-
-    path = []
-    recipe_name[curr_state] = "Goal"
-
-    while curr_state != None:
-        path.append(recipe_name[curr_state])
-        print curr_state
-        curr_state = prev[curr_state]
-    path.append("Start")
-
-    for i in range(len(path)):
-        print[path[len(path)-i-1]]
-
-    return total_cost, path
+#function to add all info to recipeDict 
+def buildDict():
+   #set all value of crafting items to 0
+   print ""
+   print "RECIPES:"
+   print ""
+   for items in Crafting['Items']:
+       recipeDict[items] = 0
+       #print items
+   #check all the rules in recipeDict
+   for action,rule in Crafting['Recipes'].items():
+       print "Action:", action
+       print "Rule:", rule
+       #If there is requirements in rule 
+       #set numbers of required item to 1
+       if 'Requires' in rule:
+           for each in rule["Requires"].keys():
+               recipeDict[each] = 1
+               print "Requires", each, recipeDict[each]
+       #If there is Consumes found in rule
+       #set the amount of Consumes items to the largest number found
+       if 'Consumes' in rule:
+           for each,amount in rule['Consumes'].items():
+               if recipeDict[each] < amount:
+                   recipeDict[each] = amount
+                   print "Consumes", each, recipeDict[each]
+       print ""
 
 
-def main():
-    state = make_initial_state(inventory)
-    goal = set_goal(state)
-    all_recipes = []
-    for name, rule in Crafting['Recipes'].items():
-        checker = make_checker(rule)
-        effector = make_effector(rule)
-        recipe = Recipe(name, checker, effector, rule['Time'])
-        all_recipes.append(recipe)
+   #items that are not in requires or consumes to craft other objects
+   recipeDict[u'wooden_axe'] = 0
+   recipeDict[u'stone_axe'] = 0
+   recipeDict[u'iron_axe'] = 0
+   recipeDict[u'iron_pickaxe'] = 0
+   print "RECIPES END"
+   print ""
 
 
-    print search(all_recipes, state, goal, goal_check, 20, None)
-    for i in range(100):
-        for recipe in all_recipes:
-            if recipe.check(state):
-                state = recipe.effect(state)
-main()
+Recipe = namedtuple('Recipe',['name','check','effect','cost'])
+all_recipes = []
+recipeDict = {} #store all the recipeDict information
+action = {}
+buildDict() #build a dict of crafting recipeDict
+for name, rule in Crafting['Recipes'].items():
+   checker = make_checker(rule)
+   effector = make_effector(rule)
+   recipe = Recipe(name, checker, effector, rule['Time'])
+   all_recipes.append(recipe)
+
+search(graph,Crafting['Initial'],is_goal)
